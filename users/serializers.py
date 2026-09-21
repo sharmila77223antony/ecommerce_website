@@ -119,3 +119,129 @@ class LoginSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         return value.lower().strip()
+
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        return value.lower().strip()
+
+
+class ForgotPasswordVerifyOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(
+        min_length=6,
+        max_length=6,
+        required=True
+    )
+
+    def validate_email(self, value):
+        return value.lower().strip()
+
+    def validate_otp(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError(
+                "OTP must contain only numbers."
+            )
+
+        return value
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+
+    email = serializers.EmailField(required=True)
+
+    new_password = serializers.CharField(
+        min_length=8,
+        max_length=128,
+        write_only=True,
+        required=True
+    )
+
+    confirm_password = serializers.CharField(
+        min_length=8,
+        max_length=128,
+        write_only=True,
+        required=True
+    )
+
+    def validate_email(self, value):
+        return value.lower().strip()
+
+    def validate_new_password(self, value):
+
+        if value.isalpha():
+            raise serializers.ValidationError(
+                "Password must contain at least one number."
+            )
+
+        if value.isdigit():
+            raise serializers.ValidationError(
+                "Password must contain letters and numbers."
+            )
+
+        return value
+
+    def validate(self, data):
+
+        if data["new_password"] != data["confirm_password"]:
+            raise serializers.ValidationError({
+                "confirm_password": "Passwords do not match."
+            })
+
+        return data
+
+class ChangePasswordSerializer(serializers.Serializer):
+
+    email = serializers.EmailField(required=True)
+
+    current_password = serializers.CharField(
+        required=True,
+        write_only=True
+    )
+
+    new_password = serializers.CharField(
+        min_length=8,
+        max_length=128,
+        required=True,
+        write_only=True
+    )
+
+    confirm_password = serializers.CharField(
+        min_length=8,
+        max_length=128,
+        required=True,
+        write_only=True
+    )
+
+    def validate_email(self, value):
+        return value.lower().strip()
+
+    def validate_new_password(self, value):
+
+        if value.isalpha():
+            raise serializers.ValidationError(
+                "Password must contain at least one number."
+            )
+
+        if value.isdigit():
+            raise serializers.ValidationError(
+                "Password must contain letters and numbers."
+            )
+
+        return value
+
+    def validate(self, data):
+
+        if data["new_password"] != data["confirm_password"]:
+            raise serializers.ValidationError({
+                "confirm_password": "Passwords do not match."
+            })
+
+        if data["current_password"] == data["new_password"]:
+            raise serializers.ValidationError({
+                "new_password": "New password must be different from current password."
+            })
+
+        return data

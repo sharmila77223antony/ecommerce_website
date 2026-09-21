@@ -12,7 +12,12 @@ from .serializers import *
 from .utils import *
 import requests
 from rest_framework.views import APIView
-
+from rest_framework.decorators import (
+    api_view,
+    permission_classes,
+    authentication_classes,
+)
+from rest_framework_simplejwt.tokens import AccessToken, TokenError
 
 
 @api_view(["POST"])
@@ -568,3 +573,368 @@ class RefreshTokenView(APIView):
                 {"error": "Invalid or expired refresh token"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def forgot_password(request):
+
+    serializer = ForgotPasswordSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response(
+            {"errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    email = serializer.validated_data["email"]
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response(
+            {"message": "No account found with this email."},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    otp = str(random.randint(100000, 999999))
+
+    cache.set(
+        f"forgot_password_{email}",
+        {
+            "otp": otp,
+            "user_id": str(user.id),
+        },
+        timeout=600
+    )
+
+    email_sent = send_otp_email(
+        email,
+        otp,
+        user.name
+    )
+
+    if not email_sent:
+        cache.delete(f"forgot_password_{email}")
+
+        return Response(
+            {"message": "Failed to send OTP email."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    return Response(
+        {
+            "message": "Password reset OTP has been sent to your email."
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def resend_forgot_password_otp(request):
+
+    serializer = ForgotPasswordSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response(
+            {"errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    email = serializer.validated_data["email"]
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response(
+            {"message": "No account found with this email."},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    registration_data = cache.get(
+        f"forgot_password_{email}"
+    )
+
+    if not registration_data:
+        return Response(
+            {
+                "message": "Forgot password session expired. Please request OTP again."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    resend_allowed = cache.get(
+        f"forgot_password_resend_{email}"
+    )
+
+    if resend_allowed:
+        return Response(
+            {
+                "message": "Please wait 2 minutes before requesting a new OTP."
+            },
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+
+    otp = str(random.randint(100000, 999999))
+
+    registration_data["otp"] = otp
+
+    cache.set(
+        f"forgot_password_{email}",
+        registration_data,
+        timeout=600
+    )
+
+    cache.set(
+        f"forgot_password_resend_{email}",
+        True,
+        timeout=120
+    )
+
+    email_sent = send_otp_email(
+        email,
+        otp,
+        user.name
+    )
+
+    if not email_sent:
+
+        cache.delete(
+            f"forgot_password_resend_{email}"
+        )
+
+        return Response(
+            {"message": "Failed to send OTP email."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    return Response(
+        {
+            "message": "New password reset OTP has been sent to your email."
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def verify_forgot_password_otp(request):
+
+    serializer = ForgotPasswordVerifyOTPSerializer(
+        data=request.data
+    )
+
+    if not serializer.is_valid():
+        return Response(
+            {"errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    email = serializer.validated_data["email"]
+    otp = serializer.validated_data["otp"]
+
+    forgot_password_data = cache.get(
+        f"forgot_password_{email}"
+    )
+
+    if not forgot_password_data:
+        return Response(
+            {
+                "message": "OTP expired. Please request a new OTP."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if forgot_password_data["otp"] != otp:
+        return Response(
+            {
+                "message": "Invalid OTP."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    cache.set(
+        f"forgot_password_verified_{email}",
+        True,
+        timeout=600
+    )
+
+    cache.delete(
+        f"forgot_password_{email}"
+    )
+
+    cache.delete(
+        f"forgot_password_resend_{email}"
+    )
+
+    return Response(
+        {
+            "message": "OTP verified successfully. You can now reset your password."
+        },
+        status=status.HTTP_200_OK
+    )
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def reset_password(request):
+
+    serializer = ResetPasswordSerializer(
+        data=request.data
+    )
+
+    if not serializer.is_valid():
+        return Response(
+            {"errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    email = serializer.validated_data["email"]
+    new_password = serializer.validated_data["new_password"]
+
+    # Check whether OTP was successfully verified
+    otp_verified = cache.get(
+        f"forgot_password_verified_{email}"
+    )
+
+    if not otp_verified:
+        return Response(
+            {
+                "message": "Please verify the OTP before resetting your password."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        user = User.objects.get(email=email)
+
+    except User.DoesNotExist:
+        return Response(
+            {
+                "message": "User not found."
+            },
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Hash the new password
+    user.password = make_password(new_password)
+
+    user.save(update_fields=["password"])
+
+    # Delete the verification status
+    cache.delete(
+        f"forgot_password_verified_{email}"
+    )
+
+    return Response(
+        {
+            "message": "Password reset successfully."
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def change_password(request):
+
+    auth_header = request.headers.get("Authorization")
+
+    if not auth_header:
+        return Response(
+            {
+                "message": "Authorization token is required."
+            },
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    if not auth_header.startswith("Bearer "):
+        return Response(
+            {
+                "message": "Invalid authorization format."
+            },
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    access_token = auth_header[7:].strip()
+
+    try:
+        token = AccessToken(access_token)
+
+    except TokenError:
+        return Response(
+            {
+                "message": "Invalid or expired access token."
+            },
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    user_id = token.get("user_id")
+
+    if not user_id:
+        return Response(
+            {
+                "message": "User ID not found in access token."
+            },
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    try:
+        user = User.objects.get(
+            pk=user_id
+        )
+
+    except EcommerceUser.DoesNotExist:
+        return Response(
+            {
+                "message": "User not found."
+            },
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    serializer = ChangePasswordSerializer(
+        data=request.data
+    )
+
+    if not serializer.is_valid():
+        return Response(
+            {
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    current_password = serializer.validated_data[
+        "current_password"
+    ]
+
+    new_password = serializer.validated_data[
+        "new_password"
+    ]
+
+    if not check_password(
+        current_password,
+        user.password
+    ):
+        return Response(
+            {
+                "message": "Current password is incorrect."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    user.password = make_password(
+        new_password
+    )
+
+    user.save(
+        update_fields=["password"]
+    )
+
+    return Response(
+        {
+            "message": "Password changed successfully."
+        },
+        status=status.HTTP_200_OK
+    )

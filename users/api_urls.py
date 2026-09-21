@@ -14,4 +14,17 @@ urlpatterns = [
         RefreshTokenView.as_view(),
         name="refresh-token"
     ),
+    path( "forgot-password/", forgot_password, name="forgot-password" ), 
+    path( "forgot-password/resend-otp/", resend_forgot_password_otp, name="resend-forgot-password-otp" ), 
+    path( "forgot-password/verify-otp/", verify_forgot_password_otp, name="verify-forgot-password-otp" ),
+    path(
+        "forgot-password/reset/",
+        reset_password,
+        name="reset-password"
+    ),
+    path(
+        "change-password/",
+        change_password,
+        name="change-password"
+    ),
 ]
