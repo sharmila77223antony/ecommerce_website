@@ -261,3 +261,6 @@ SIMPLE_JWT = {
 # =========================================================
 
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

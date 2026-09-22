@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from developer.models import User
+from developer.models import *
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -245,3 +245,59 @@ class ChangePasswordSerializer(serializers.Serializer):
             })
 
         return data
+
+class SubCategorySerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(
+        source="category.name",
+        read_only=True
+    )
+
+    icon = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SubCategory
+        fields = [
+            "id",
+            "category",
+            "category_name",
+            "name",
+            "icon",
+        ]
+
+    def get_icon(self, obj):
+        request = self.context.get("request")
+
+        if obj.icon:
+            if request:
+                return request.build_absolute_uri(obj.icon.url)
+            return obj.icon.url
+
+        return None
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    subcategories = SubCategorySerializer(
+        many=True,
+        read_only=True
+    )
+
+    icon = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Category
+        fields = [
+            "id",
+            "name",
+            "icon",
+            "subcategories",
+        ]
+
+    def get_icon(self, obj):
+        request = self.context.get("request")
+
+        if obj.icon:
+            if request:
+                return request.build_absolute_uri(obj.icon.url)
+            return obj.icon.url
+
+        return None

@@ -938,3 +938,50 @@ def change_password(request):
         },
         status=status.HTTP_200_OK
     )
+
+class CategoryListAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        categories = Category.objects.prefetch_related(
+            "subcategories"
+        ).all()
+
+        serializer = CategorySerializer(
+            categories,
+            many=True,
+            context={"request": request}
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Categories fetched successfully",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class SubCategoryListAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        subcategories = SubCategory.objects.select_related(
+            "category"
+        ).all()
+
+        serializer = SubCategorySerializer(
+            subcategories,
+            many=True,
+            context={"request": request}
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Subcategories fetched successfully",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
