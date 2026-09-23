@@ -301,3 +301,68 @@ class CategorySerializer(serializers.ModelSerializer):
             return obj.icon.url
 
         return None
+
+class ProductImageSerializer(serializers.ModelSerializer):
+
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductImage
+        fields = [
+            "id",
+            "image",
+        ]
+
+    def get_image(self, obj):
+        request = self.context.get("request")
+
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+
+            return obj.image.url
+
+        return None
+
+
+# For product list and featured product list
+class ProductSerializer(serializers.ModelSerializer):
+
+    images = ProductImageSerializer(
+        many=True,
+        read_only=True
+    )
+
+    class Meta:
+        model = Product
+
+        fields = [
+            "id",
+            "name",
+            "price",
+            "images",
+        ]
+
+
+# For single product detail
+class ProductDetailSerializer(serializers.ModelSerializer):
+
+    images = ProductImageSerializer(
+        many=True,
+        read_only=True
+    )
+
+    class Meta:
+        model = Product
+
+        fields = [
+            "id",
+            "name",
+            "description",
+            "price",
+            "stock",
+            "featured",
+            "images",
+            "created_at",
+            "updated_at",
+        ]

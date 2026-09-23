@@ -37,4 +37,19 @@ urlpatterns = [
         SubCategoryListAPIView.as_view(),
         name="subcategory-list"
     ),
+    path(
+        "products/",
+        ProductListAPIView.as_view(),
+        name="product-list"
+    ),
+    path(
+        "featured/",
+        FeaturedProductListAPIView.as_view(),
+        name="featured-product-list"
+    ),
+    path(
+        "products/<uuid:product_id>/",
+        ProductDetailAPIView.as_view(),
+        name="product-detail"
+    ),
 ]

@@ -985,3 +985,106 @@ class SubCategoryListAPIView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+
+class ProductListAPIView(APIView):
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+
+        products = Product.objects.prefetch_related(
+            "images"
+        ).filter(
+            is_active=True
+        ).order_by("-created_at")
+
+        serializer = ProductSerializer(
+            products,
+            many=True,
+            context={
+                "request": request
+            }
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Products fetched successfully",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class FeaturedProductListAPIView(APIView):
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+
+        products = Product.objects.prefetch_related(
+            "images"
+        ).filter(
+            is_active=True,
+            featured=True
+        ).order_by("-created_at")
+
+        serializer = ProductSerializer(
+            products,
+            many=True,
+            context={
+                "request": request
+            }
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Featured products fetched successfully",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class ProductDetailAPIView(APIView):
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, product_id):
+
+        try:
+            product = Product.objects.prefetch_related(
+                "images"
+            ).get(
+                id=product_id,
+                is_active=True
+            )
+
+        except Product.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Product not found",
+                    "data": None
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ProductDetailSerializer(
+            product,
+            context={
+                "request": request
+            }
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Product details fetched successfully",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
